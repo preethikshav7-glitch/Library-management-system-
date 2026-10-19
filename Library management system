@@ -1,0 +1,176 @@
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+
+class Book {
+    final int id;
+    final String title, author;
+    boolean available = true;
+
+    Book(int id, String title, String author) {
+        this.id = id;
+        this.title = title;
+        this.author = author;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("[%d] %s by %s - %s", id, title, author, available ? "Available" : "Issued");
+    }
+}
+
+class Loan {
+    final Book book;
+    final LocalDate issuedOn;
+
+    Loan(Book book, LocalDate issuedOn) {
+        this.book = book;
+        this.issuedOn = issuedOn;
+    }
+}
+
+class Member {
+    final int id;
+    final String name;
+    final List<Loan> loans = new ArrayList<>();
+
+    Member(int id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("[%d] %s (books borrowed: %d)", id, name, loans.size());
+    }
+}
+
+class Library {
+    static final int MAX_BOOKS = 3;
+    static final int LOAN_DAYS = 14;
+    static final double FINE_PER_DAY = 2.0;
+
+    private final Map<Integer, Book> books = new LinkedHashMap<>();
+    private final Map<Integer, Member> members = new LinkedHashMap<>();
+    private int nextBookId = 1, nextMemberId = 1;
+
+    Book addBook(String title, String author) {
+        Book b = new Book(nextBookId++, title, author);
+        books.put(b.id, b);
+        return b;
+    }
+
+    Member addMember(String name) {
+        Member m = new Member(nextMemberId++, name);
+        members.put(m.id, m);
+        return m;
+    }
+
+    String issueBook(int bookId, int memberId) {
+        Book b = books.get(bookId);
+        Member m = members.get(memberId);
+        if (b == null) return "Book not found.";
+        if (m == null) return "Member not found.";
+        if (!b.available) return "Book is already issued.";
+        if (m.loans.size() >= MAX_BOOKS) return "Member has reached the limit of " + MAX_BOOKS + " books.";
+        b.available = false;
+        m.loans.add(new Loan(b, LocalDate.now()));
+        return "Issued '" + b.title + "' to " + m.name + ". Due in " + LOAN_DAYS + " days.";
+    }
+
+    String returnBook(int bookId, int memberId) {
+        Member m = members.get(memberId);
+        if (m == null) return "Member not found.";
+        Iterator<Loan> it = m.loans.iterator();
+        while (it.hasNext()) {
+            Loan loan = it.next();
+            if (loan.book.id == bookId) {
+                it.remove();
+                loan.book.available = true;
+                long days = ChronoUnit.DAYS.between(loan.issuedOn, LocalDate.now());
+                long overdue = Math.max(0, days - LOAN_DAYS);
+                String msg = "Returned '" + loan.book.title + "'.";
+                if (overdue > 0) msg += String.format(" Overdue by %d day(s). Fine: %.2f", overdue, overdue * FINE_PER_DAY);
+                return msg;
+            }
+        }
+        return "This member has not borrowed that book.";
+    }
+
+    List<Book> searchBooks(String keyword) {
+        String k = keyword.toLowerCase();
+        List<Book> result = new ArrayList<>();
+        for (Book b : books.values()) {
+            if (b.title.toLowerCase().contains(k) || b.author.toLowerCase().contains(k)) result.add(b);
+        }
+        return result;
+    }
+
+    Collection<Book> allBooks() { return books.values(); }
+    Collection<Member> allMembers() { return members.values(); }
+}
+
+public class LibraryManagementSystem {
+    private static final Scanner in = new Scanner(System.in);
+    private static final Library library = new Library();
+
+    public static void main(String[] args) {
+        // Sample data
+        library.addBook("Clean Code", "Robert C. Martin");
+        library.addBook("Effective Java", "Joshua Bloch");
+        library.addMember("Alice");
+
+        while (true) {
+            System.out.println("\n===== Library Management System =====");
+            System.out.println("1. Add book");
+            System.out.println("2. Add member");
+            System.out.println("3. Issue book");
+            System.out.println("4. Return book");
+            System.out.println("5. Search books");
+            System.out.println("6. List all books");
+            System.out.println("7. List all members");
+            System.out.println("0. Exit");
+            int choice = readInt("Choose: ");
+
+            switch (choice) {
+                case 1 -> {
+                    Book b = library.addBook(readLine("Title: "), readLine("Author: "));
+                    System.out.println("Added: " + b);
+                }
+                case 2 -> {
+                    Member m = library.addMember(readLine("Name: "));
+                    System.out.println("Added: " + m);
+                }
+                case 3 -> System.out.println(library.issueBook(readInt("Book ID: "), readInt("Member ID: ")));
+                case 4 -> System.out.println(library.returnBook(readInt("Book ID: "), readInt("Member ID: ")));
+                case 5 -> {
+                    List<Book> found = library.searchBooks(readLine("Keyword: "));
+                    if (found.isEmpty()) System.out.println("No matches.");
+                    else found.forEach(System.out::println);
+                }
+                case 6 -> library.allBooks().forEach(System.out::println);
+                case 7 -> library.allMembers().forEach(System.out::println);
+                case 0 -> {
+                    System.out.println("Goodbye!");
+                    return;
+                }
+                default -> System.out.println("Invalid option.");
+            }
+        }
+    }
+
+    private static String readLine(String prompt) {
+        System.out.print(prompt);
+        return in.nextLine().trim();
+    }
+
+    private static int readInt(String prompt) {
+        while (true) {
+            try {
+                return Integer.parseInt(readLine(prompt));
+            } catch (NumberFormatException e) {
+                System.out.println("Please enter a number.");
+            }
+        }
+    }
+}
